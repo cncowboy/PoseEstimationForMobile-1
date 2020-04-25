@@ -114,14 +114,48 @@ def main(argv=None):
     )
 
     with tf.Graph().as_default(), tf.device("/cpu:0"):
-        train_dataset = get_train_dataset_pipeline(params['batchsize'], params['max_epoch'], buffer_size=100)
-        valid_dataset = get_valid_dataset_pipeline(params['batchsize'], params['max_epoch'], buffer_size=100)
+        train_dataset = get_train_dataset_pipeline(params['batchsize'], params['max_epoch'], buffer_size=5)
+        valid_dataset = get_valid_dataset_pipeline(params['batchsize'], params['max_epoch'], buffer_size=5)
 
         train_iterator = train_dataset.make_one_shot_iterator()
+        
+        '''
+        sess2 = tf.Session()
+        coord2 = tf.train.Coordinator()
+        
+        #input_image, input_heat = sess2.run(train_iterator.get_next())
+        #print(input_image)
+        #print(input_heat)
+        train_queue = tf.FIFOQueue(capacity=10, dtypes=(tf.float32, tf.float32))
+        enqueue_op = train_queue.enqueue(train_iterator.get_next())
+        numberOfThreads = 1
+        qr = tf.train.QueueRunner(train_queue, [enqueue_op] * numberOfThreads)
+        enqueue_threads = qr.create_threads(sess2, coord=coord2, start=True)
+        # tf.train.add_queue_runner(qr)
+        input = train_queue.dequeue()
+
+        print("wait data prepare: %d" % sess2.run(train_queue.size()))
+        time.sleep(20)
+        for i in range(1000):
+            #print("wait 5 second data prepare: %d" % sess2.run(train_queue.size()))
+            print("dequeue begin:%d , queue size: %d " % (i, sess2.run(train_queue.size())) )
+            img1, heat1 = sess2.run(input)
+            print("dequeue end:%d" % i)
+            #print('image:', img1)
+            #print('heat:', heat1)
+
+        coord2.request_stop()
+        # And wait for them to actually do it.
+        coord2.join(enqueue_threads)
+        '''
+        
         valid_iterator = valid_dataset.make_one_shot_iterator()
         
-        handle = tf.placeholder(tf.string, shape=[])
-        input_iterator = tf.data.Iterator.from_string_handle(handle, train_dataset.output_types, train_dataset.output_shapes)
+        #handle = tf.placeholder(tf.string, shape=[])
+        input_image_array = tf.placeholder(tf.float32, shape=(None, 192, 192, 3))
+        input_heat_array = tf.placeholder(tf.float32, shape=(None, 96, 96, 14))
+        #input_iterator = tf.data.Iterator.from_string_handle(handle, train_dataset.output_types, train_dataset.output_shapes)
+        #print(input_iterator)
 
         global_step = tf.Variable(0, trainable=False)
         learning_rate = tf.train.exponential_decay(float(params['lr']), global_step,
@@ -134,7 +168,9 @@ def main(argv=None):
             # cpu (mac only)
             with tf.device("/cpu:0"):
                 with tf.name_scope("CPU_0"):
-                    input_image, input_heat = input_iterator.get_next()
+                    #input_image, input_heat = input_iterator.get_next()
+                    input_image = tf.convert_to_tensor(input_image_array)
+                    input_heat = tf.convert_to_tensor(input_heat_array)
                     loss, last_heat_loss, pred_heat = get_loss_and_output(params['model'], params['batchsize'],
                                                                           input_image, input_heat, reuse_variable)
                     reuse_variable = True
@@ -145,7 +181,13 @@ def main(argv=None):
             for i in range(params['gpus']):
                 with tf.device("/gpu:%d" % i):
                     with tf.name_scope("GPU_%d" % i):
-                        input_image, input_heat = input_iterator.get_next()
+                        #input_image, input_heat = input_iterator.get_next()
+                        #print(input_image)
+                        input_image = input_image_array
+                        input_heat = input_heat_array
+                        #if input_image.device == '/device:CPU:0':
+                        #    input_image, input_heat = input_iterator.get_next()
+                        #input_heat = tf.convert_to_tensor(input_heat_array)
                         loss, last_heat_loss, pred_heat = get_loss_and_output(params['model'], params['batchsize'], input_image, input_heat, reuse_variable)
                         reuse_variable = True
                         grads = opt.compute_gradients(loss)
@@ -183,10 +225,34 @@ def main(argv=None):
         config = tf.ConfigProto()
         # occupy gpu gracefully
         config.gpu_options.allow_growth = True
+
+        '''
+        sess_q = tf.Session()
+        coord_q = tf.train.Coordinator()
+        train_queue = tf.FIFOQueue(capacity=10, dtypes=(tf.float32, tf.float32))
+        enqueue_op = train_queue.enqueue(train_iterator.get_next())
+        numberOfThreads = 1
+        qr = tf.train.QueueRunner(train_queue, [enqueue_op] * numberOfThreads)
+        enqueue_threads = qr.create_threads(sess_q, coord=coord_q, start=True)
+        #tf.train.add_queue_runner(qr)
+        '''
+        train_queue = tf.FIFOQueue(capacity=5, dtypes=(tf.float32, tf.float32))
+        train_enqueue_op = train_queue.enqueue(train_iterator.get_next())
+        valid_queue = tf.FIFOQueue(capacity=5, dtypes=(tf.float32, tf.float32))
+        valid_enqueue_op = valid_queue.enqueue(valid_iterator.get_next())
+ 
         with tf.Session(config=config) as sess:
             init.run()
-            train_handle = sess.run(train_iterator.string_handle())
-            valid_handle = sess.run(valid_iterator.string_handle())
+            train_data_input = train_queue.dequeue()
+            valid_data_input = valid_queue.dequeue()
+            numberOfThreads = 1
+            train_qr = tf.train.QueueRunner(train_queue, [train_enqueue_op] * numberOfThreads)
+            valid_qr = tf.train.QueueRunner(valid_queue, [valid_enqueue_op] * numberOfThreads)
+            tf.train.add_queue_runner(train_qr)
+            tf.train.add_queue_runner(valid_qr)
+ 
+            #train_handle = sess.run(train_iterator.string_handle())
+            #valid_handle = sess.run(valid_iterator.string_handle())
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
@@ -195,18 +261,37 @@ def main(argv=None):
             print("Start training...")
             for step in range(total_step_num):
                 start_time = time.time()
+                
+                #print("dequeue a batchsize begin")
+                input_image_array_h, input_heat_array_h = sess.run(train_data_input)
+                #print('image shape:', input_image_array_h.shape)
+                end_q_time = time.time()
+                #print("dequeue a batchsize end: %d" % (end_q_time - start_time))
+                _, loss_value, lh_loss = sess.run([train_op, loss, last_heat_loss],
+                        feed_dict={input_image_array: input_image_array_h, input_heat_array: input_heat_array_h}
+                )
+                '''
                 _, loss_value, lh_loss = sess.run([train_op, loss, last_heat_loss],
                                                   feed_dict={handle: train_handle}
                 )
+                '''
                 duration = time.time() - start_time
+                #print('step: %d, duration:%d' % (step, duration))
 
                 if step != 0 and step % params['per_update_tensorboard_step'] == 0:
                     # False will speed up the training time.
                     if params['pred_image_on_tensorboard'] is True:
+                        input_image_array_h, input_heat_array_h = sess.run(valid_data_input)
+                        valid_loss_value, valid_lh_loss, valid_in_image, valid_in_heat, valid_p_heat = sess.run(
+                            [loss, last_heat_loss, input_image, input_heat, pred_heat],
+                            feed_dict={input_image_array: input_image_array_h, input_heat_array: input_heat_array_h}
+                        )
+                        '''
                         valid_loss_value, valid_lh_loss, valid_in_image, valid_in_heat, valid_p_heat = sess.run(
                             [loss, last_heat_loss, input_image, input_heat, pred_heat],
                             feed_dict={handle: valid_handle}
                         )
+                        '''
                         result = []
                         for index in range(params['batchsize']):
                             r = CocoPose.display_image(
@@ -235,7 +320,11 @@ def main(argv=None):
                     print(format_str % (datetime.now(), step, loss_value, lh_loss, examples_per_sec, sec_per_batch))
 
                     # tensorboard visualization
-                    merge_op = sess.run(summary_merge_op, feed_dict={handle: valid_handle})
+                    #merge_op = sess.run(summary_merge_op, feed_dict={handle: valid_handle})
+                    input_image_array_h, input_heat_array_h = sess.run(valid_data_input)
+                    merge_op = sess.run(summary_merge_op,
+                            feed_dict={input_image_array: input_image_array_h, input_heat_array: input_heat_array_h}
+                            )
                     summary_writer.add_summary(merge_op, step)
 
                 # save model
@@ -245,6 +334,13 @@ def main(argv=None):
             coord.request_stop()
             coord.join(threads)
 
+        '''        
+        coord_q.request_stop()
+        # And wait for them to actually do it.
+        coord_q.join(enqueue_threads)
+        '''
+        
+ 
 
 if __name__ == '__main__':
     tf.app.run()
