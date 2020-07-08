@@ -18,21 +18,23 @@ _scale = 2
 
 
 class CocoPart(Enum):
-    Top = 0
-    Neck = 1
-    RShoulder = 2
-    RElbow = 3
-    RWrist = 4
+    Nose = 0
+    LEye = 1
+    REye = 2
+    LEar = 3
+    REar = 4
     LShoulder = 5
-    LElbow = 6
-    LWrist = 7
-    RHip = 8
-    RKnee = 9
-    RAnkle = 10
+    RShoulder = 6
+    LElbow = 7
+    RElbow = 8
+    LWrist = 9
+    RWrist = 10
     LHip = 11
-    LKnee = 12
-    LAnkle = 13
-    Background = 14
+    RHip = 12
+    LKnee = 13
+    RKnee = 14
+    LAnkle = 15
+    RAnkle = 16
 
 
 def set_network_input_wh(w, h):
@@ -122,10 +124,28 @@ def pose_flip(meta):
     img = cv2.flip(img, 1)
 
     # flip meta
-    flip_list = [CocoPart.Top, CocoPart.Neck, CocoPart.LShoulder, CocoPart.LElbow, CocoPart.LWrist, CocoPart.RShoulder,
-                 CocoPart.RElbow, CocoPart.RWrist,
-                 CocoPart.LHip, CocoPart.LKnee, CocoPart.LAnkle, CocoPart.RHip, CocoPart.RKnee, CocoPart.RAnkle
-                 ]
+    flip_list = [
+            CocoPart.Nose,
+            CocoPart.LEye,
+            CocoPart.REye,
+            CocoPart.LEar,
+            CocoPart.REar,
+            CocoPart.LShoulder,
+            CocoPart.RShoulder,
+            CocoPart.LElbow,
+            CocoPart.RElbow,
+            CocoPart.LWrist,
+            CocoPart.RWrist,
+            CocoPart.LHip,
+            CocoPart.RHip,
+            CocoPart.LKnee,
+            CocoPart.RKnee,
+            CocoPart.LAnkle,
+            CocoPart.RAnkle
+            #CocoPart.Top, CocoPart.Neck, CocoPart.LShoulder, CocoPart.LElbow, CocoPart.LWrist, CocoPart.RShoulder,
+            #CocoPart.RElbow, CocoPart.RWrist,
+            #CocoPart.LHip, CocoPart.LKnee, CocoPart.LAnkle, CocoPart.RHip, CocoPart.RKnee, CocoPart.RAnkle
+        ]
     adjust_joint_list = []
     for joint in meta.joint_list:
         adjust_joint = []

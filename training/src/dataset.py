@@ -24,12 +24,13 @@ from multiprocessing import Process,Queue
 import random
 import numpy as np
 
-BASE = "/root/hdd"
+BASE_TRAIN = "/root/hdd"
+BASE_VAL = "/root/hdd"
 BASE_PATH = ""
 #TRAIN_JSON = "ai_challenger_train.json"
 #VALID_JSON = "ai_challenger_valid.json"
-TRAIN_JSON = "train.json"
-VALID_JSON = "test.json"
+TRAIN_JSON = "person_keypoints_train2017.json"
+VALID_JSON = "person_keypoints_val2017.json"
 
 
 TRAIN_ANNO = None
@@ -41,9 +42,10 @@ valid_sequence_data = None
 
 
 def set_config(config):
-    global CONFIG, BASE, BASE_PATH
+    global CONFIG, BASE_TRAIN, BASE_VAL, BASE_PATH
     CONFIG = config
-    BASE = CONFIG['imgpath']
+    BASE_TRAIN = CONFIG['imgpath_train']
+    BASE_VAL = CONFIG['imgpath_val']
     BASE_PATH = CONFIG['datapath']
 
 
@@ -71,6 +73,10 @@ def _parse_function(imgId, is_train, ann=None):
     anno_ids = anno.getAnnIds(imgIds=imgId)
     img_anno = anno.loadAnns(anno_ids)
     idx = img_meta['id']
+    if is_train:
+        BASE = BASE_TRAIN
+    else:
+        BASE = BASE_VAL
     img_path = join(BASE, img_meta['file_name'])
 
     img_meta_data = CocoMetadata(idx, img_path, img_meta, img_anno, sigma=6.0)

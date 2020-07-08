@@ -96,6 +96,7 @@ def main(argv=None):
     if not os.path.exists(params['logpath']):
         os.makedirs(params['logpath'])
 
+    print(params)
     dataset.set_config(params)
     set_network_input_wh(params['input_width'], params['input_height'])
     set_network_scale(params['scale'])
@@ -153,7 +154,7 @@ def main(argv=None):
         
         #handle = tf.placeholder(tf.string, shape=[])
         input_image_array = tf.placeholder(tf.float32, shape=(None, 192, 192, 3))
-        input_heat_array = tf.placeholder(tf.float32, shape=(None, 96, 96, 14))
+        input_heat_array = tf.placeholder(tf.float32, shape=(None, 96, 96, 17))
         #input_iterator = tf.data.Iterator.from_string_handle(handle, train_dataset.output_types, train_dataset.output_shapes)
         #print(input_iterator)
 
@@ -343,5 +344,4 @@ def main(argv=None):
  
 
 if __name__ == '__main__':
-    #tf.app.run()
-    print("")
+    tf.app.run()
